@@ -8,6 +8,7 @@ interface Props {
 }
 
 type DurationUnit = "number" | "minutes";
+
 type ExerciseType =
   | "Upper Limbs"
   | "Swimming"
@@ -46,49 +47,62 @@ export default function ActivityForm({ onSubmit }: Props) {
   const [duration, setDuration] = useState<number>(0);
   const [durationUnit, setDurationUnit] = useState<DurationUnit>("number");
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const token = localStorage.getItem("farr_token");
+  const token = typeof window !== "undefined" ? localStorage.getItem("farr_token") : null;
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setImageFile(e.target.files[0]);
-    }
+    const file = e.target.files?.[0];
+    if (file) setImageFile(file);
   };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!token) return alert("Unauthorized");
 
-    const formData = new FormData();
-    formData.append("exerciseType", exerciseType);
-    formData.append("duration", duration.toString());
-    formData.append("durationUnit", durationUnit);
-    if (imageFile) formData.append("image", imageFile);
+    if (!token) {
+      alert("Unauthorized — no valid session found.");
+      return;
+    }
+
+    if (!exerciseType || duration <= 0) {
+      alert("Please fill all fields correctly.");
+      return;
+    }
+
+    setLoading(true);
 
     try {
+      const formData = new FormData();
+      formData.append("exerciseType", exerciseType);
+      formData.append("duration", duration.toString());
+      formData.append("durationUnit", durationUnit);
+      if (imageFile) formData.append("image", imageFile);
+
       await fetcher("/api/activity/submit", {
         method: "POST",
         headers: getAuthHeaders(token),
         body: formData,
       });
+
       onSubmit();
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        alert(err.message);
-      } else {
-        alert("An unknown error occurred");
-      }
+      const message =
+        err instanceof Error ? err.message : "An unknown error occurred.";
+      alert(message);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <form className="mb-6 p-4 border rounded-md" onSubmit={handleSubmit}>
-      <h2 className="font-semibold mb-2">Submit Daily Activity</h2>
+    <form className="mb-6 p-4 border rounded-md shadow-sm" onSubmit={handleSubmit}>
+      <h2 className="font-semibold text-lg mb-3">Submit Daily Activity</h2>
 
+      {/* Exercise Type */}
       <select
         value={exerciseType}
         onChange={(e) => setExerciseType(e.target.value as ExerciseType)}
-        className="border p-2 rounded mb-2 w-full"
+        className="border p-2 rounded mb-3 w-full"
       >
         <option value="Upper Limbs">Upper Limbs</option>
         <option value="Lower Limbs">Lower Limbs</option>
@@ -123,31 +137,43 @@ export default function ActivityForm({ onSubmit }: Props) {
         <option value="Badminton">Badminton</option>
       </select>
 
+      {/* Duration */}
       <input
         type="number"
         placeholder="Duration"
         value={duration}
         onChange={(e) => setDuration(Number(e.target.value))}
-        className="border p-2 rounded mb-2 w-full"
+        className="border p-2 rounded mb-3 w-full"
         required
       />
 
+      {/* Duration Unit */}
       <select
         value={durationUnit}
         onChange={(e) => setDurationUnit(e.target.value as DurationUnit)}
-        className="border p-2 rounded mb-2 w-full"
+        className="border p-2 rounded mb-3 w-full"
       >
         <option value="number">Number</option>
         <option value="minutes">Minutes</option>
       </select>
 
-      <input type="file" onChange={handleFileChange} className="mb-2" />
+      {/* Image Upload */}
+      <input
+        type="file"
+        accept="image/*"
+        onChange={handleFileChange}
+        className="mb-3 w-full"
+      />
 
+      {/* Submit Button */}
       <button
         type="submit"
-        className="bg-blue-500 text-white px-4 py-2 rounded w-full"
+        disabled={loading}
+        className={`bg-blue-500 text-white px-4 py-2 rounded w-full transition-colors ${
+          loading ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-600"
+        }`}
       >
-        Submit
+        {loading ? "Submitting..." : "Submit"}
       </button>
     </form>
   );
